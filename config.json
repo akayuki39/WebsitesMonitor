@@ -1,0 +1,20 @@
+{
+    "sites":[
+        {
+            "name":"akayuki",
+            "uri":"https://github.com/akayuki39",
+            "contentType":"html",
+            "parserType":"css",
+            "path":"#js-contribution-activity",
+            "subscribers":["subscriber@sample.com"]
+        },
+    ],
+    "sender":"sender@sample.com",
+    "useTLS":true,
+    "smtphost":"sample.com",
+    "smtpport":587,
+    "smtpusername":"websitesmonitor",
+    "smtppwd":"pwd-here",
+    "workingDirectory":"sites",
+    "administrator":"administrator@sample.com"
+}
