@@ -6,6 +6,7 @@ from email.mime.text import MIMEText
 from email.header import Header
 from email.utils import formataddr
 from urllib.parse import urljoin
+from my_proxy_smtplib import ProxySMTP
 
 import os
 import sys
@@ -91,7 +92,11 @@ def sendmail(receivers, mail, sendAsHtml, encoding=None):
 
     # initialize session once, not each time this method gets called
     if mailsession is None:
-        mailsession = smtplib.SMTP(config["smtphost"], config["smtpport"])
+        if "smtpProxyAddr" in config and config["smtpProxyAddr"] and "smtpProxyPort" in config and config["smtpProxyPort"]:
+            mailsession = ProxySMTP(config["smtphost"], config["smtpport"], proxy_addr='127.0.0.1', proxy_port=7890)
+        else:
+            mailsession = smtplib.SMTP(config["smtphost"], config["smtpport"])
+
         if config["useTLS"]:
             mailsession.ehlo()
             mailsession.starttls()

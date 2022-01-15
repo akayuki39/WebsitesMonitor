@@ -16,5 +16,7 @@
     "smtpusername":"websitesmonitor",
     "smtppwd":"pwd-here",
     "workingDirectory":"sites",
-    "administrator":"administrator@sample.com"
+    "administrator":"administrator@sample.com",
+    "smtpProxyAddr":"127.0.0.1",
+    "smtpProxyPort":"7890"
 }
