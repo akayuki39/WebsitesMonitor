@@ -147,7 +147,7 @@ def pollWebsites(sites):
         print('polling site [' + site_name + '] ...')
 
         try:
-            raw_contents = uritool.URLReceiver(uri=site['uri'], contenttype=site['contentType']).performAction()
+            raw_contents = uritool.URLReceiver(uri=site['uri'], contenttype=site['contentType'], userAgent=config['userAgent']).performAction()
         except Exception as e:
             # TODO: Send error mail here. 
             subject = "[Error] " + str(e.code) + " happened when polling " + site_name

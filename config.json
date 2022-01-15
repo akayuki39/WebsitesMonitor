@@ -9,6 +9,7 @@
             "subscribers":["subscriber@sample.com"]
         },
     ],
+    "userAgent":"Mozilla/5.0 (Windows NT 6.1; WOW64)",
     "sender":"sender@sample.com",
     "useTLS":true,
     "smtphost":"sample.com",
