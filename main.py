@@ -4,6 +4,7 @@ import hashlib
 import smtplib
 from email.mime.text import MIMEText
 from email.header import Header
+from email.utils import formataddr
 from urllib.parse import urljoin
 
 import os
@@ -33,31 +34,6 @@ def loadConfig():
     with open(_CONFIG_PATH) as json_file:
         config = json.load(json_file)
     return config
-
-
-# TODO: content should be a list to include muliple 
-#       website contents in one mail. 
-#       Each site should be warpped in a div. Then 
-#       combined together. 
-# def buildMailBody(subject, link, content, sendAsHtml, encoding=None):
-#     global defaultEncoding
-
-#     if encoding is None:
-#         encoding = defaultEncoding
-
-#     if sendAsHtml:
-#         baseurl = None
-#         if link is not None:
-#             content = '<p><a href="' + link + '">' + subject + '</a></p>\n' + content
-#             baseurl = urljoin(link, '/')
-#         mail = MIMEText('<html><head><title>' + subject + '</title>' + ('<base href="' + baseurl + '">' if baseurl else '') + '</head><body>' + content + '</body></html>', 'html', encoding)
-#     else:
-#         if link is not None:
-#             content = link + '\n\n' + content
-#         mail = MIMEText(content, 'plain', encoding)
-
-#     mail['Subject'] = Header(subject, encoding)
-#     return mail
 
 
 def buildMailBody(subject, content, link=None, sendAsHtml=True, encoding=None):
@@ -98,16 +74,19 @@ def sitesToMail(subject, sites, sendAsHtml=True, encoding=None):
         for site in sites:
             content = site['uri'] + '\n' + site['changes'] + '\n\n'
             mail_content += content
-        mail = buildMailBody(subject, mail_content, encoding)
+        mail = buildMailBody(subject, mail_content, None, sendAsHtml, encoding)
 
     return mail
 
 
 # TODO: Render html mail independently as web page. 
-def sendmail(receivers, mail, sendAsHtml):
+def sendmail(receivers, mail, sendAsHtml, encoding=None):
     global mailsession
 
-    mail['From'] = config["sender"]
+    if encoding is None:
+        encoding = defaultEncoding
+
+    mail['From'] = formataddr((str(Header(config["senderName"], encoding)), config["sender"]))
     mail['To'] = ", ".join(receivers)
 
     # initialize session once, not each time this method gets called
@@ -166,10 +145,10 @@ def pollWebsites(sites):
             raw_contents = uritool.URLReceiver(uri=site['uri'], contenttype=site['contentType']).performAction()
         except Exception as e:
             # TODO: Send error mail here. 
-            subject = "Error when polling " + site_name
-            content = e
-            mail = buildMailBody(subject, content)
-            sendmail(config['administrator'], mail, False)
+            subject = "[Error] " + str(e.code) + " happened when polling " + site_name
+            content = str(e.code) + ' ' + e.reason
+            mail = buildMailBody(subject, content, link=site['uri'], sendAsHtml=False)
+            sendmail([config['administrator']], mail, False)
             continue
 
         site_previous = getStoredSite(site_name)
@@ -184,7 +163,8 @@ def pollWebsites(sites):
 
                 storeSite(site)
 
-                changes = myers.diff(site_previous['content'].splitlines(), content.content.splitlines(), format=True, diffs_only=True)
+                # changes = myers.diff(site_previous['content'].splitlines(), content.content.splitlines(), format=True, diffs_only=True)
+                changes = myers.get_inserts(site_previous['content'].splitlines(), content.content.splitlines())
                 changes = '\n'.join(changes)
                 site['changes'] = changes
 
