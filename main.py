@@ -22,19 +22,12 @@ import random
 
 import uritool
 import myers
+import utils
 
-
-_CONFIG_PATH = 'config.json'
 
 config = None
 mailsession = None
 defaultEncoding = 'utf-8'
-
-
-def loadConfig():
-    with open(_CONFIG_PATH) as json_file:
-        config = json.load(json_file)
-    return config
 
 
 def buildMailBody(subject, content, link=None, sendAsHtml=True, encoding=None):
@@ -195,7 +188,7 @@ def pollWebsites(sites):
 def _main():
     global config
 
-    config = loadConfig()
+    config = utils.loadConfig()
     sites = config['sites']
 
     pollWebsites(sites)
