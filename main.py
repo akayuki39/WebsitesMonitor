@@ -23,6 +23,7 @@ import random
 import uritool
 import myers
 import utils
+import notiontool
 
 
 config = None
@@ -188,6 +189,7 @@ def pollWebsites(sites):
 def _main():
     global config
 
+    notiontool.pull_config()
     config = utils.loadConfig()
     sites = config['sites']
 

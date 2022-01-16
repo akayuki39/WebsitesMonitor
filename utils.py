@@ -12,6 +12,12 @@ def loadConfig():
     return config
 
 
+def rewriteConfig(content):
+    with open(_CONFIG_PATH, 'w') as thefile:
+        thefile.truncate(0)
+        thefile.write(content)
+
+
 class Content:
     def __init__(self, uri, encoding, title, content, contenttype, additional=None, receivers=None):
         self.uri = uri

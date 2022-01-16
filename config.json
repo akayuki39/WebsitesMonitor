@@ -10,6 +10,7 @@
         },
     ],
     "userAgent":"Mozilla/5.0 (Windows NT 6.1; WOW64)",
+    "senderName": "WebsitesMonitor",
     "sender":"sender@sample.com",
     "useTLS":true,
     "smtphost":"sample.com",
@@ -19,5 +20,7 @@
     "workingDirectory":"sites",
     "administrator":"administrator@sample.com",
     "smtpProxyAddr":"127.0.0.1",
-    "smtpProxyPort":"7890"
+    "smtpProxyPort":"7890",
+    "notionToken": "",
+    "notionDatabaseId": ""
 }
