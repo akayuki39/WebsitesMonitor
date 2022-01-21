@@ -86,7 +86,7 @@ def sendmail(receivers, mail, sendAsHtml, encoding=None):
 
     # initialize session once, not each time this method gets called
     if mailsession is None:
-        if "smtpProxyAddr" in config and config["smtpProxyAddr"] and "smtpProxyPort" in config and config["smtpProxyPort"]:
+        if config["useSmtpProxy"] is True:
             mailsession = ProxySMTP(config["smtphost"], config["smtpport"], proxy_addr='127.0.0.1', proxy_port=7890)
         else:
             mailsession = smtplib.SMTP(config["smtphost"], config["smtpport"])

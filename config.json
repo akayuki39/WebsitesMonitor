@@ -19,6 +19,7 @@
     "smtppwd":"pwd-here",
     "workingDirectory":"sites",
     "administrator":"administrator@sample.com",
+    "useSmtpProxy": false,
     "smtpProxyAddr":"127.0.0.1",
     "smtpProxyPort":"7890",
     "notionToken": "",
