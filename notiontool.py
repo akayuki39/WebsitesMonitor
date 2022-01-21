@@ -25,8 +25,12 @@ def pull_config():
             new_config_site["contentType"] = result["properties"]["contentType"]["select"]["name"]
         if result["properties"]["parserType"]["select"]:
             new_config_site["parserType"] = result["properties"]["parserType"]["select"]["name"]
+        else:
+            new_config_site["parserType"] = ""
         if result["properties"]["path"]["rich_text"]:
             new_config_site["path"] = result["properties"]["path"]["rich_text"][0]["text"]["content"]
+        else:
+            new_config_site["path"] = ""
         new_config_site["subscribers"] = [result["properties"]["subscribers"]["people"][i]["person"]["email"] for i in range(len(result["properties"]["subscribers"]["people"]))]
         new_config_sites.append(new_config_site)
 

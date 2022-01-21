@@ -24,6 +24,7 @@ import uritool
 import myers
 import utils
 import notiontool
+import parsertool
 
 
 config = None
@@ -142,6 +143,9 @@ def pollWebsites(sites):
 
         try:
             raw_contents = uritool.URLReceiver(uri=site['uri'], contenttype=site['contentType'], userAgent=config['userAgent']).performAction()
+            if site['parserType'] and site['path']:
+                parser = parsertool.ParserGenerator.getInstance(site['parserType'], site['path'])
+                raw_contents = parser.performAction(raw_contents)
         except Exception as e:
             # TODO: Send error mail here. 
             subject = "[Error] " + str(e.code) + " happened when polling " + site_name
