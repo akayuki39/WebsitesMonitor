@@ -174,9 +174,13 @@ def pollWebsites(sites):
         # raw_contents will only have one element in the list. 
         # content is a Content object
         for content in raw_contents:
+            # Only send update mail when site file exists and updated. 
+            if not site_previous:
+                site['content'] = content.content
+                storeSite(site)
             # 注意如果name没变，但是parser改变的情况。此时不通知变化，只保存。
             # 文件里按照config的sites中元素形式保存成json文件，多一个content键值对
-            if content.content != site_previous['content']:
+            elif content.content != site_previous['content']:
                 site['content'] = content.content
 
                 storeSite(site)
