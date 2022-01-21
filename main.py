@@ -53,6 +53,21 @@ def buildMailBody(subject, content, link=None, sendAsHtml=True, encoding=None):
     return mail
 
 
+# Input: User's changed sites list
+# Output: If multiple sites then "[name1] and x more sites have updated!". 
+# If one site then "[name1] has updated!"
+def sitesToMailSubject(sites):
+    name = sites[0]["name"]
+    others_count = len(sites) - 1
+    if others_count == 0:
+        subject = "[{}] has updated!".format(name)
+    elif others_count == 1:
+        subject = "[{}] and {} more site have updated!".format(name, others_count)
+    else:
+        subject = "[{}] and {} more sites have updated!".format(name, others_count)
+    return subject
+
+
 def sitesToMail(subject, sites, sendAsHtml=True, encoding=None):
     global defaultEncoding
     
@@ -181,12 +196,13 @@ def pollWebsites(sites):
 
     # Construct mail body and send mail
     # 不同的site monitor的人可能不同。。要以人为单位构建并发送邮件
-    subject = 'You have new updates on monitored websites!'
     
     for subscriber, sites_idxs in send_dict.items():
-        subscribed_sites = [sites[i] for i in sites_idxs]
+        changed_subscribed_sites = [sites[i] for i in sites_idxs]
 
-        mail = sitesToMail(subject, subscribed_sites)
+        subject = sitesToMailSubject(changed_subscribed_sites)
+
+        mail = sitesToMail(subject, changed_subscribed_sites)
         sendmail([subscriber], mail, True)
 
 
