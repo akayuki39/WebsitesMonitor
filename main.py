@@ -6,6 +6,7 @@ from email.header import Header
 from email.utils import formataddr
 from urllib.parse import urljoin
 from my_proxy_smtplib import ProxySMTP
+from threading import Thread
 
 import os
 import sys
@@ -208,7 +209,10 @@ def pollWebsites(sites):
         subject = sitesToMailSubject(changed_subscribed_sites)
 
         mail = sitesToMail(subject, changed_subscribed_sites)
-        sendmail([subscriber], mail, True)
+
+        # sendmail([subscriber], mail, True)
+        send_mail_thr = Thread(target = sendmail, args = [[subscriber], mail, True])
+        send_mail_thr.start()
 
 
 def _main():
@@ -219,6 +223,7 @@ def _main():
     sites = config['sites']
 
     pollWebsites(sites)
+    print('Polling Finished!')
 
 
 if __name__ == '__main__':
