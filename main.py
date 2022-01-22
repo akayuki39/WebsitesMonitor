@@ -53,10 +53,10 @@ def buildMailBody(subject, content, link=None, sendAsHtml=True, encoding=None):
     return mail
 
 
-# Input: User's changed sites list
-# Output: If multiple sites then "[name1] and x more sites have updated!". 
-# If one site then "[name1] has updated!"
 def sitesToMailSubject(sites):
+    # Input: User's changed sites list
+    # Output: If multiple sites then "[name1] and x more sites have updated!". 
+    # If one site then "[name1] has updated!"
     name = sites[0]["name"]
     others_count = len(sites) - 1
     if others_count == 0:
@@ -69,6 +69,8 @@ def sitesToMailSubject(sites):
 
 
 def sitesToMail(subject, sites, sendAsHtml=True, encoding=None):
+    # Return mail object for sites. Use this to generate mail that to inform user sites updates. 
+    # TODO: Use templates to render html mail independently as web page. 
     global defaultEncoding
     
     if encoding is None:
@@ -90,7 +92,6 @@ def sitesToMail(subject, sites, sendAsHtml=True, encoding=None):
     return mail
 
 
-# TODO: Render html mail independently as web page. 
 def sendmail(receivers, mail, sendAsHtml, encoding=None):
     global mailsession
 
@@ -117,6 +118,8 @@ def sendmail(receivers, mail, sendAsHtml, encoding=None):
 
 
 def storeSite(site):
+    # Store site data in site['name'].txt file.
+    # Whole site dictionary will be saved. 
     if 'changes' in site:
         site = site.copy()
         site.pop('changes')
@@ -126,7 +129,6 @@ def storeSite(site):
         thefile.write(json.dumps(site))
 
 
-# 没有的话就返回空的defaultdict
 def getStoredSite(site_name):
     stored_str = ''
 
@@ -140,18 +142,23 @@ def getStoredSite(site_name):
         return defaultdict(str)
 
 
-# TODO: Send mail by message queue. 
-# TODO: Use MongoDB to save the sites. 
-# sites: List with dicts as element. Directly from config.
 def pollWebsites(sites):
+    """Poll all monitored sites, save updated ones and send notify mail to subscribers. 
+
+    Fetch all monitored sites from config then parse them. If there is difference between saved content then save 
+    the new content and send update mail to subscribed users. Mail body is the inserted lines using myers algorithm.
+
+    Args:
+        sites: A list from config, config['sites']. Including dictionaries of each site. 
+
+    Todo:
+        Send mail by message queue. 
+        Use MongoDB to save the sites. 
+    """
     global defaultEncoding
 
     send_dict = {}
 
-    # 每个网站把数据储存在name.txt中，直接把得到的内容与txt文件的全部内容对比
-    # 用Mayers算法对比得到全部的变更。所以有parser也可以直接把全部内容放进文件再与之前比对
-    
-    # 发生变化的时候发邮件，把所有的发生变化的uri放在一个邮件里发出。把新加的或者变更的几行拿出来(git diff的Myers算法)。
     for i, site in enumerate(sites):
         site_name = site['name']
         print('polling site [' + site_name + '] ...')
@@ -162,7 +169,6 @@ def pollWebsites(sites):
                 parser = parsertool.ParserGenerator.getInstance(site['parserType'], site['path'])
                 raw_contents = parser.performAction(raw_contents)
         except Exception as e:
-            # TODO: Send error mail here. 
             subject = "[Error] " + str(e.code) + " happened when polling " + site_name
             content = str(e.code) + ' ' + e.reason
             mail = buildMailBody(subject, content, link=site['uri'], sendAsHtml=False)
@@ -172,34 +178,27 @@ def pollWebsites(sites):
         site_previous = getStoredSite(site_name)
 
         # raw_contents will only have one element in the list. 
-        # content is a Content object
         for content in raw_contents:
             # Only send update mail when site file exists and updated. 
             if not site_previous:
                 site['content'] = content.content
                 storeSite(site)
-            # 注意如果name没变，但是parser改变的情况。此时不通知变化，只保存。
-            # 文件里按照config的sites中元素形式保存成json文件，多一个content键值对
             elif content.content != site_previous['content']:
                 site['content'] = content.content
 
                 storeSite(site)
 
-                # changes = myers.diff(site_previous['content'].splitlines(), content.content.splitlines(), format=True, diffs_only=True)
                 changes = myers.get_inserts(site_previous['content'].splitlines(), content.content.splitlines())
                 changes = '\n'.join(changes)
                 site['changes'] = changes
 
-                # 填充sender_dict，{subscriber:[idx1, idx2]}。
-                # idx是subscriber监控sites中发生变化的index
+                # sender_dict: A dictionary like {subscriber:[idx1, idx2, ...]}. 
+                # The idxs are site index in sites list that the user subscribed and got updated. 
                 for subscriber in site['subscribers']:
                     if subscriber in send_dict:
                         send_dict[subscriber].append(i)
                     else:
                         send_dict[subscriber] = [i]
-
-    # Construct mail body and send mail
-    # 不同的site monitor的人可能不同。。要以人为单位构建并发送邮件
     
     for subscriber, sites_idxs in send_dict.items():
         changed_subscribed_sites = [sites[i] for i in sites_idxs]
