@@ -1,5 +1,4 @@
 import io
-import hashlib
 
 import smtplib
 from email.mime.text import MIMEText
@@ -19,6 +18,8 @@ from collections import defaultdict
 import time
 from time import strftime
 import random
+
+import re
 
 import uritool
 import myers
@@ -80,8 +81,9 @@ def sitesToMail(subject, sites, sendAsHtml=True, encoding=None):
 
     if sendAsHtml:
         for site in sites:
-            content = '<p><a href="' + site['uri'] + '">' + site['name'] + '</a></p>\n' + site['changes'] + '\n\n'
+            content = '<p><a href="' + site['uri'] + '">' + site['name'] + '</a></p>\n' + site['changes'] + '\n\n<hr>'
             mail_content += content
+        mail_content = re.sub('\<hr>$', '', mail_content)
         mail = buildMailBody(subject, mail_content, None, sendAsHtml, encoding)
     else:
         for site in sites:
