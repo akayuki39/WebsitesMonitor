@@ -127,7 +127,7 @@ def storeSite(site):
         site = site.copy()
         site.pop('changes')
 
-    file_path = os.path.join(config["workingDirectory"], site["name"] + '.txt')
+    file_path = os.path.join(config["workingDirectory"] + '/sites', site["name"] + '.txt')
     with open(file_path, 'w') as thefile:
         thefile.write(json.dumps(site))
 
@@ -135,7 +135,7 @@ def storeSite(site):
 def getStoredSite(site_name):
     stored_str = ''
 
-    file_path = os.path.join(config["workingDirectory"], site_name + '.txt')
+    file_path = os.path.join(config["workingDirectory"] + '/sites', site_name + '.txt')
     if os.path.exists(file_path):
         with open(file_path, 'r') as thefile:
             for line in thefile:

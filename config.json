@@ -17,7 +17,7 @@
     "smtpport":587,
     "smtpusername":"websitesmonitor",
     "smtppwd":"pwd-here",
-    "workingDirectory":"sites",
+    "workingDirectory":"/path-to-your-dir/WebsitesMonitor",
     "administrator":"administrator@sample.com",
     "useSmtpProxy": false,
     "smtpProxyAddr":"127.0.0.1",
