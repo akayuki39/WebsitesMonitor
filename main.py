@@ -171,6 +171,11 @@ def pollWebsites(sites):
             if site['parserType'] and site['path']:
                 parser = parsertool.ParserGenerator.getInstance(site['parserType'], site['path'])
                 raw_contents = parser.performAction(raw_contents)
+                if len(raw_contents) > 1:
+                    # This means parser get multiple results. Combine them into one. 
+                    for i in range(1, len(raw_contents)):
+                        raw_contents[0].content += raw_contents[i].content
+                    raw_contents = [raw_contents[0]]
         except Exception as e:
             subject = "[Error] " + str(e.code) + " happened when polling " + site_name
             content = str(e.code) + ' ' + e.reason
@@ -180,7 +185,8 @@ def pollWebsites(sites):
 
         site_previous = getStoredSite(site_name)
 
-        # raw_contents will only have one element in the list. 
+        # We combine multiple results from parser. 
+        # So raw_contents will only have one element in the list now. 
         for content in raw_contents:
             # Only send update mail when site file exists and updated. 
             if not site_previous:
