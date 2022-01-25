@@ -82,7 +82,7 @@ def sitesToMail(subject, sites, sendAsHtml=True, encoding=None):
 
     if sendAsHtml:
         for site in sites:
-            content = '<p><a href="' + site['uri'] + '">' + site['name'] + '</a></p>\n' + site['changes'] + '\n\n<hr>'
+            content = '<h2><a href="' + site['uri'] + '">' + site['name'] + '</a></h2>\n' + site['changes'] + '\n\n<hr>'
             mail_content += content
         mail_content = re.sub('\<hr>$', '', mail_content)
         mail = buildMailBody(subject, mail_content, None, sendAsHtml, encoding)
