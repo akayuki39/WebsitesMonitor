@@ -216,9 +216,9 @@ def pollWebsites(sites):
 
         mail = sitesToMail(subject, changed_subscribed_sites)
 
-        # sendmail([subscriber], mail, True)
-        send_mail_thr = Thread(target = sendmail, args = [[subscriber], mail, True])
-        send_mail_thr.start()
+        sendmail([subscriber], mail, True)
+        # send_mail_thr = Thread(target = sendmail, args = [[subscriber], mail, True])
+        # send_mail_thr.start()
 
 
 def _main():
