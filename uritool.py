@@ -11,7 +11,7 @@ class Receiver():
 
 # Returns: list with only one Content object. [Content]. 
 class URLReceiver(Receiver):
-    def __init__(self, uri, contenttype='html', encoding='utf-8', userAgent=None, accept=None):
+    def __init__(self, uri, contenttype='text/html', encoding='utf-8', userAgent=None, accept=None):
         super().__init__(uri)
         self.contenttype = contenttype
         self.encoding = encoding
@@ -32,6 +32,13 @@ class URLReceiver(Receiver):
 
         with urllib.request.urlopen(req) as thefile:
             filecontent = thefile.read().decode(self.encoding, errors='ignore')
-            contentList.append(Content(uri=self.uri, encoding=self.encoding, title=None, content=filecontent, contenttype=self.contenttype))
+            contentList.append(Content(uri=self.uri, encoding=self.encoding, title=None, content=filecontent, contenttype=thefile.getheader("Content-Type")))
 
         return contentList
+
+
+def _main():
+    pass
+
+if __name__ == '__main__':
+    _main()
