@@ -177,8 +177,8 @@ def pollWebsites(sites):
                         raw_contents[0].content += raw_contents[i].content
                     raw_contents = [raw_contents[0]]
         except Exception as e:
-            subject = "[Error] " + str(e.code) + " happened when polling " + site_name
-            content = str(e.code) + ' ' + e.reason
+            subject = "[Error] " + str(type(e)) + " happened when polling " + site_name
+            content = e.__str__()
             mail = buildMailBody(subject, content, link=site['uri'], sendAsHtml=False)
             sendmail([config['administrator']], mail, False)
             continue
