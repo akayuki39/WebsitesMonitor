@@ -2,7 +2,13 @@
 
 import urllib.request
 import urllib.error
+import ssl
 from utils import Content
+
+
+# Disable ssl certificate verify. 
+ssl._create_default_https_context = ssl._create_unverified_context
+
 
 class Receiver():
     def __init__(self, uri):
