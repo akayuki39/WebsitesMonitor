@@ -8,6 +8,7 @@ from urllib.parse import urljoin
 from my_proxy_smtplib import ProxySMTP
 from threading import Thread
 
+import pymongo
 import os
 import sys
 import getopt
@@ -32,7 +33,8 @@ import parsertool
 config = None
 mailsession = None
 defaultEncoding = 'utf-8'
-
+myclient = pymongo.MongoClient("mongodb://localhost:27017/")
+mydb = myclient["mydatabase"]
 
 def buildMailBody(subject, content, link=None, sendAsHtml=True, encoding=None):
     global defaultEncoding
@@ -120,30 +122,51 @@ def sendmail(receivers, mail, sendAsHtml, encoding=None):
     mailsession.send_message(mail)
 
 
+# def storeSite(site):
+#     # Store site data in site['name'].txt file.
+#     # Whole site dictionary will be saved.
+#     if 'changes' in site:
+#         site = site.copy()
+#         site.pop('changes')
+#
+#     file_path = os.path.join(config["workingDirectory"] + '/sites', site["name"] + '.txt')
+#     with open(file_path, 'w') as thefile:
+#         thefile.write(json.dumps(site))
+
+
 def storeSite(site):
     # Store site data in site['name'].txt file.
-    # Whole site dictionary will be saved. 
+    # Whole site dictionary will be saved.
+    global mydb
     if 'changes' in site:
         site = site.copy()
         site.pop('changes')
-
-    file_path = os.path.join(config["workingDirectory"] + '/sites', site["name"] + '.txt')
-    with open(file_path, 'w') as thefile:
-        thefile.write(json.dumps(site))
+    mycol = mydb[site["name"]]
+    if site["name"] in mydb.list_collection_names():
+        mycol.update_one({}, {"$set": site})
+    else:
+        mycol.insert_one(site)
 
 
 def getStoredSite(site_name):
-    stored_str = ''
-
-    file_path = os.path.join(config["workingDirectory"] + '/sites', site_name + '.txt')
-    if os.path.exists(file_path):
-        with open(file_path, 'r') as thefile:
-            for line in thefile:
-                stored_str += line
-        return json.loads(stored_str)
+    global mydb
+    if site_name in mydb.list_collection_names():
+        return mydb[site_name].find_one()
     else:
         return defaultdict(str)
 
+
+# def getStoredSite(site_name):
+#     stored_str = ''
+#
+#     file_path = os.path.join(config["workingDirectory"] + '/sites', site_name + '.txt')
+#     if os.path.exists(file_path):
+#         with open(file_path, 'r') as thefile:
+#             for line in thefile:
+#                 stored_str += line
+#         return json.loads(stored_str)
+#     else:
+#         return defaultdict(str)
 
 def pollWebsites(sites):
     """Poll all monitored sites, save updated ones and send notify mail to subscribers. 
@@ -224,7 +247,7 @@ def pollWebsites(sites):
 def _main():
     global config
 
-    notiontool.pull_config()
+    # notiontool.pull_config()
     config = utils.loadConfig()
     sites = config['sites']
 
