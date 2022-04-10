@@ -29,12 +29,12 @@ import utils
 import notiontool
 import parsertool
 
-
 config = None
 mailsession = None
 defaultEncoding = 'utf-8'
 myclient = pymongo.MongoClient("mongodb://localhost:27017/")
 mydb = myclient["mydatabase"]
+
 
 def buildMailBody(subject, content, link=None, sendAsHtml=True, encoding=None):
     global defaultEncoding
@@ -47,7 +47,9 @@ def buildMailBody(subject, content, link=None, sendAsHtml=True, encoding=None):
         if link is not None:
             # content = '<p><a href="' + link + '">' + subject + '</a></p>\n' + content
             baseurl = urljoin(link, '/')
-        mail = MIMEText('<html><head><title>' + subject + '</title>' + ('<base href="' + baseurl + '">' if baseurl else '') + '</head><body>' + content + '</body></html>', 'html', encoding)
+        mail = MIMEText('<html><head><title>' + subject + '</title>' + (
+            '<base href="' + baseurl + '">' if baseurl else '') + '</head><body>' + content + '</body></html>', 'html',
+                        encoding)
     else:
         if link is not None:
             content = link + '\n\n' + content
@@ -76,7 +78,7 @@ def sitesToMail(subject, sites, sendAsHtml=True, encoding=None):
     # Return mail object for sites. Use this to generate mail that to inform user sites updates. 
     # TODO: Use templates to render html mail independently as web page. 
     global defaultEncoding
-    
+
     if encoding is None:
         encoding = defaultEncoding
 
@@ -97,17 +99,11 @@ def sitesToMail(subject, sites, sendAsHtml=True, encoding=None):
     return mail
 
 
-def sendmail(receivers, mail, sendAsHtml, encoding=None):
-    global mailsession
-
-    if encoding is None:
-        encoding = defaultEncoding
-
-    mail['From'] = formataddr((str(Header(config["senderName"], encoding)), config["sender"]))
-    mail['To'] = ", ".join(receivers)
-
-    # initialize session once, not each time this method gets called
-    if mailsession is None:
+class EmailThread(Thread):
+    def __init__(self, mail):
+        self.mail = mail
+        Thread.__init__(self)
+    def run(self):
         if config["useSmtpProxy"] is True:
             mailsession = ProxySMTP(config["smtphost"], config["smtpport"], proxy_addr='127.0.0.1', proxy_port=7890)
         else:
@@ -118,8 +114,42 @@ def sendmail(receivers, mail, sendAsHtml, encoding=None):
             mailsession.starttls()
         if config["smtpusername"] is not None:
             mailsession.login(config["smtpusername"], config["smtppwd"])
+        mailsession.send_message(self.mail)
 
-    mailsession.send_message(mail)
+
+
+
+def sendmail(receivers, mail, sendAsHtml, encoding=None):
+    if encoding is None:
+        encoding = defaultEncoding
+
+    mail['From'] = formataddr((str(Header(config["senderName"], encoding)), config["sender"]))
+    mail['To'] = ", ".join(receivers)
+
+
+# def sendmail(receivers, mail, sendAsHtml, encoding=None):
+#     global mailsession
+#
+#     if encoding is None:
+#         encoding = defaultEncoding
+#
+#     mail['From'] = formataddr((str(Header(config["senderName"], encoding)), config["sender"]))
+#     mail['To'] = ", ".join(receivers)
+#
+#     # initialize session once, not each time this method gets called
+#     if mailsession is None:
+#         if config["useSmtpProxy"] is True:
+#             mailsession = ProxySMTP(config["smtphost"], config["smtpport"], proxy_addr='127.0.0.1', proxy_port=7890)
+#         else:
+#             mailsession = smtplib.SMTP(config["smtphost"], config["smtpport"])
+#
+#         if config["useTLS"]:
+#             mailsession.ehlo()
+#             mailsession.starttls()
+#         if config["smtpusername"] is not None:
+#             mailsession.login(config["smtpusername"], config["smtppwd"])
+#
+#     mailsession.send_message(mail)
 
 
 # def storeSite(site):
@@ -168,70 +198,171 @@ def getStoredSite(site_name):
 #     else:
 #         return defaultdict(str)
 
-def pollWebsites(sites):
+def poll_single_site(i, site):
+    global mydb
+    send_dict = {}
+    site_name = site['name']
+    print('polling site [' + site_name + '] ...')
+
+    try:
+        raw_contents = uritool.URLReceiver(uri=site['uri'], contenttype=site['contentType'],
+                                           userAgent=config['userAgent']).performAction()
+        if site['parserType'] and site['path']:
+            parser = parsertool.ParserGenerator.getInstance(site['parserType'], site['path'])
+            raw_contents = parser.performAction(raw_contents)
+            if len(raw_contents) > 1:
+                # This means parser get multiple results. Combine them into one.
+                for i in range(1, len(raw_contents)):
+                    raw_contents[0].content += raw_contents[i].content
+                raw_contents = [raw_contents[0]]
+    except Exception as e:
+        content = e.__str__()
+        mydb[site_name].insert_one(content)
+
+    site_previous = getStoredSite(site_name)
+
+    # We combine multiple results from parser.
+    # So raw_contents will only have one element in the list now.
+    for content in raw_contents:
+        # Only send update mail when site file exists and updated.
+        if not site_previous:
+            site['content'] = content.content
+            storeSite(site)
+        elif content.content != site_previous['content']:
+            site['content'] = content.content
+
+            storeSite(site)
+
+            changes = myers.get_inserts(site_previous['content'].splitlines(), content.content.splitlines())
+            changes = '\n'.join(changes)
+            site['changes'] = changes
+
+            # sender_dict: A dictionary like {subscriber:[idx1, idx2, ...]}.
+            # The idxs are site index in sites list that the user subscribed and got updated.
+            for subscriber in site['subscribers']:
+                if subscriber in send_dict:
+                    send_dict[subscriber].append(i)
+                else:
+                    send_dict[subscriber] = [i]
+
+
+def pollwebsite(i, site, send_dict):
+    site_name = site['name']
+    print('polling site [' + site_name + '] ...')
+    try:
+        raw_contents = uritool.URLReceiver(uri=site['uri'], contenttype=site['contentType'],
+                                           userAgent=config['userAgent']).performAction()
+        if site['parserType'] and site['path']:
+            parser = parsertool.ParserGenerator.getInstance(site['parserType'], site['path'])
+            raw_contents = parser.performAction(raw_contents)
+            if len(raw_contents) > 1:
+                # This means parser get multiple results. Combine them into one.
+                for i in range(1, len(raw_contents)):
+                    raw_contents[0].content += raw_contents[i].content
+                raw_contents = [raw_contents[0]]
+    except Exception as e:
+        subject = "[Error] " + str(type(e)) + " happened when polling " + site_name
+        content = e.__str__()
+        mail = buildMailBody(subject, content, link=site['uri'], sendAsHtml=False)
+        sendmail([config['administrator']], mail, False)
+        return
+    site_previous = getStoredSite(site_name)
+
+    # We combine multiple results from parser.
+    # So raw_contents will only have one element in the list now.
+    for content in raw_contents:
+        # Only send update mail when site file exists and updated.
+        if not site_previous:
+            site['content'] = content.content
+            storeSite(site)
+        elif content.content != site_previous['content']:
+            site['content'] = content.content
+
+            storeSite(site)
+
+            changes = myers.get_inserts(site_previous['content'].splitlines(), content.content.splitlines())
+            changes = '\n'.join(changes)
+            site['changes'] = changes
+
+            # sender_dict: A dictionary like {subscriber:[idx1, idx2, ...]}.
+            # The idxs are site index in sites list that the user subscribed and got updated.
+            for subscriber in site['subscribers']:
+                if subscriber in send_dict:
+                    send_dict[subscriber].append(i)
+                else:
+                    send_dict[subscriber] = [i]
+
+
+def multi_thread(sites):
     """Poll all monitored sites, save updated ones and send notify mail to subscribers. 
 
     Fetch all monitored sites from config then parse them. If there is difference between saved content then save 
     the new content and send update mail to subscribed users. Mail body is the inserted lines using myers algorithm.
 
     Args:
-        sites: A list from config, config['sites']. Including dictionaries of each site. 
-
-    Todo:
-        Send mail by message queue. 
-        Use MongoDB to save the sites. 
+        sites: A list from config, config['sites']. Including dictionaries of each site.
     """
     global defaultEncoding
 
+    poll_threads = []
+    send_threads = []
     send_dict = {}
 
     for i, site in enumerate(sites):
-        site_name = site['name']
-        print('polling site [' + site_name + '] ...')
+        t = Thread(target=pollwebsite, args=(i, site, send_dict))
+        poll_threads.append(t)
+        t.setDaemon(True)
+    for t in poll_threads:
+        t.start()
+    for t in poll_threads:
+        t.join()
+        # site_name = site['name']
+        # print('polling site [' + site_name + '] ...')
+        #
+        # try:
+        #     raw_contents = uritool.URLReceiver(uri=site['uri'], contenttype=site['contentType'],
+        #                                        userAgent=config['userAgent']).performAction()
+        #     if site['parserType'] and site['path']:
+        #         parser = parsertool.ParserGenerator.getInstance(site['parserType'], site['path'])
+        #         raw_contents = parser.performAction(raw_contents)
+        #         if len(raw_contents) > 1:
+        #             # This means parser get multiple results. Combine them into one.
+        #             for i in range(1, len(raw_contents)):
+        #                 raw_contents[0].content += raw_contents[i].content
+        #             raw_contents = [raw_contents[0]]
+        # except Exception as e:
+        #     subject = "[Error] " + str(type(e)) + " happened when polling " + site_name
+        #     content = e.__str__()
+        #     mail = buildMailBody(subject, content, link=site['uri'], sendAsHtml=False)
+        #     sendmail([config['administrator']], mail, False)
+        #     continue
+        #
+        # site_previous = getStoredSite(site_name)
+        #
+        # # We combine multiple results from parser.
+        # # So raw_contents will only have one element in the list now.
+        # for content in raw_contents:
+        #     # Only send update mail when site file exists and updated.
+        #     if not site_previous:
+        #         site['content'] = content.content
+        #         storeSite(site)
+        #     elif content.content != site_previous['content']:
+        #         site['content'] = content.content
+        #
+        #         storeSite(site)
+        #
+        #         changes = myers.get_inserts(site_previous['content'].splitlines(), content.content.splitlines())
+        #         changes = '\n'.join(changes)
+        #         site['changes'] = changes
+        #
+        #         # sender_dict: A dictionary like {subscriber:[idx1, idx2, ...]}.
+        #         # The idxs are site index in sites list that the user subscribed and got updated.
+        #         for subscriber in site['subscribers']:
+        #             if subscriber in send_dict:
+        #                 send_dict[subscriber].append(i)
+        #             else:
+        #                 send_dict[subscriber] = [i]
 
-        try:
-            raw_contents = uritool.URLReceiver(uri=site['uri'], contenttype=site['contentType'], userAgent=config['userAgent']).performAction()
-            if site['parserType'] and site['path']:
-                parser = parsertool.ParserGenerator.getInstance(site['parserType'], site['path'])
-                raw_contents = parser.performAction(raw_contents)
-                if len(raw_contents) > 1:
-                    # This means parser get multiple results. Combine them into one. 
-                    for i in range(1, len(raw_contents)):
-                        raw_contents[0].content += raw_contents[i].content
-                    raw_contents = [raw_contents[0]]
-        except Exception as e:
-            subject = "[Error] " + str(type(e)) + " happened when polling " + site_name
-            content = e.__str__()
-            mail = buildMailBody(subject, content, link=site['uri'], sendAsHtml=False)
-            sendmail([config['administrator']], mail, False)
-            continue
-
-        site_previous = getStoredSite(site_name)
-
-        # We combine multiple results from parser. 
-        # So raw_contents will only have one element in the list now. 
-        for content in raw_contents:
-            # Only send update mail when site file exists and updated. 
-            if not site_previous:
-                site['content'] = content.content
-                storeSite(site)
-            elif content.content != site_previous['content']:
-                site['content'] = content.content
-
-                storeSite(site)
-
-                changes = myers.get_inserts(site_previous['content'].splitlines(), content.content.splitlines())
-                changes = '\n'.join(changes)
-                site['changes'] = changes
-
-                # sender_dict: A dictionary like {subscriber:[idx1, idx2, ...]}. 
-                # The idxs are site index in sites list that the user subscribed and got updated. 
-                for subscriber in site['subscribers']:
-                    if subscriber in send_dict:
-                        send_dict[subscriber].append(i)
-                    else:
-                        send_dict[subscriber] = [i]
-    
     for subscriber, sites_idxs in send_dict.items():
         changed_subscribed_sites = [sites[i] for i in sites_idxs]
 
@@ -240,8 +371,13 @@ def pollWebsites(sites):
         mail = sitesToMail(subject, changed_subscribed_sites)
 
         sendmail([subscriber], mail, True)
-        # send_mail_thr = Thread(target = sendmail, args = [[subscriber], mail, True])
-        # send_mail_thr.start()
+        send_mail_thr = EmailThread(mail)
+        send_threads.append(send_mail_thr)
+        send_mail_thr.setDaemon(True)
+    for send_mail_thr in send_threads:
+        send_mail_thr.start()
+    for send_mail_thr in send_threads:
+        send_mail_thr.join()
 
 
 def _main():
@@ -251,7 +387,7 @@ def _main():
     config = utils.loadConfig()
     sites = config['sites']
 
-    pollWebsites(sites)
+    multi_thread(sites)
     print('Polling Finished!')
 
 
