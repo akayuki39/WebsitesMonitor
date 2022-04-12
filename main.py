@@ -275,7 +275,6 @@ def pollwebsite(i, site, send_dict):
         # print(compare_pdf(site['name'], site['uri']))
         try:
             if compare_pdf(site['name'], site['uri']):
-                print("success")
                 site['changes'] = ""
                 for subscriber in site['subscribers']:
                     if subscriber in send_dict:
