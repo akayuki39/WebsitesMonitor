@@ -1,3 +1,4 @@
+import hashlib
 import io
 
 import smtplib
@@ -5,6 +6,9 @@ from email.mime.text import MIMEText
 from email.header import Header
 from email.utils import formataddr
 from urllib.parse import urljoin
+
+import requests
+
 from my_proxy_smtplib import ProxySMTP
 from threading import Thread
 
@@ -198,99 +202,137 @@ def getStoredSite(site_name):
 #     else:
 #         return defaultdict(str)
 
-def poll_single_site(i, site):
-    global mydb
-    send_dict = {}
-    site_name = site['name']
-    print('polling site [' + site_name + '] ...')
+# def poll_single_site(i, site):
+#     global mydb
+#     send_dict = {}
+#     site_name = site['name']
+#     print('polling site [' + site_name + '] ...')
+#
+#     try:
+#         raw_contents = uritool.URLReceiver(uri=site['uri'], contenttype=site['contentType'],
+#                                            userAgent=config['userAgent']).performAction()
+#         if site['parserType'] and site['path']:
+#             parser = parsertool.ParserGenerator.getInstance(site['parserType'], site['path'])
+#             raw_contents = parser.performAction(raw_contents)
+#             if len(raw_contents) > 1:
+#                 # This means parser get multiple results. Combine them into one.
+#                 for i in range(1, len(raw_contents)):
+#                     raw_contents[0].content += raw_contents[i].content
+#                 raw_contents = [raw_contents[0]]
+#     except Exception as e:
+#         content = e.__str__()
+#         mydb[site_name].insert_one(content)
+#
+#     site_previous = getStoredSite(site_name)
+#
+#     # We combine multiple results from parser.
+#     # So raw_contents will only have one element in the list now.
+#     for content in raw_contents:
+#         # Only send update mail when site file exists and updated.
+#         if not site_previous:
+#             site['content'] = content.content
+#             storeSite(site)
+#         elif content.content != site_previous['content']:
+#             site['content'] = content.content
+#
+#             storeSite(site)
+#
+#             changes = myers.get_inserts(site_previous['content'].splitlines(), content.content.splitlines())
+#             changes = '\n'.join(changes)
+#             site['changes'] = changes
+#
+#             # sender_dict: A dictionary like {subscriber:[idx1, idx2, ...]}.
+#             # The idxs are site index in sites list that the user subscribed and got updated.
+#             for subscriber in site['subscribers']:
+#                 if subscriber in send_dict:
+#                     send_dict[subscriber].append(i)
+#                 else:
+#                     send_dict[subscriber] = [i]
 
-    try:
-        raw_contents = uritool.URLReceiver(uri=site['uri'], contenttype=site['contentType'],
-                                           userAgent=config['userAgent']).performAction()
-        if site['parserType'] and site['path']:
-            parser = parsertool.ParserGenerator.getInstance(site['parserType'], site['path'])
-            raw_contents = parser.performAction(raw_contents)
-            if len(raw_contents) > 1:
-                # This means parser get multiple results. Combine them into one.
-                for i in range(1, len(raw_contents)):
-                    raw_contents[0].content += raw_contents[i].content
-                raw_contents = [raw_contents[0]]
-    except Exception as e:
-        content = e.__str__()
-        mydb[site_name].insert_one(content)
 
-    site_previous = getStoredSite(site_name)
-
-    # We combine multiple results from parser.
-    # So raw_contents will only have one element in the list now.
-    for content in raw_contents:
-        # Only send update mail when site file exists and updated.
-        if not site_previous:
-            site['content'] = content.content
-            storeSite(site)
-        elif content.content != site_previous['content']:
-            site['content'] = content.content
-
-            storeSite(site)
-
-            changes = myers.get_inserts(site_previous['content'].splitlines(), content.content.splitlines())
-            changes = '\n'.join(changes)
-            site['changes'] = changes
-
-            # sender_dict: A dictionary like {subscriber:[idx1, idx2, ...]}.
-            # The idxs are site index in sites list that the user subscribed and got updated.
-            for subscriber in site['subscribers']:
-                if subscriber in send_dict:
-                    send_dict[subscriber].append(i)
-                else:
-                    send_dict[subscriber] = [i]
+def compare_pdf(file_prev, url):
+    file_path = 'sites/' + file_prev + ".pdf"
+    response = requests.get(url)
+    data_cur = response.content
+    readable_hash_cur = hashlib.md5(data_cur).hexdigest()
+    if not os.path.exists(file_path):
+        with open(file_path, 'wb') as my_data:
+            my_data.write(data_cur)
+    else:
+        with open(file_path, "rb") as f:
+            data_prev = f.read()
+            readable_hash_prev = hashlib.md5(data_prev).hexdigest()
+        if readable_hash_prev != readable_hash_cur:
+            with open(file_path, 'wb') as my_data:
+                my_data.write(data_cur)
+            return True
 
 
 def pollwebsite(i, site, send_dict):
     site_name = site['name']
     print('polling site [' + site_name + '] ...')
-    try:
-        raw_contents = uritool.URLReceiver(uri=site['uri'], contenttype=site['contentType'],
-                                           userAgent=config['userAgent']).performAction()
-        if site['parserType'] and site['path']:
-            parser = parsertool.ParserGenerator.getInstance(site['parserType'], site['path'])
-            raw_contents = parser.performAction(raw_contents)
-            if len(raw_contents) > 1:
-                # This means parser get multiple results. Combine them into one.
-                for i in range(1, len(raw_contents)):
-                    raw_contents[0].content += raw_contents[i].content
-                raw_contents = [raw_contents[0]]
-    except Exception as e:
-        subject = "[Error] " + str(type(e)) + " happened when polling " + site_name
-        content = e.__str__()
-        mail = buildMailBody(subject, content, link=site['uri'], sendAsHtml=False)
-        sendmail([config['administrator']], mail, False)
-        return
-    site_previous = getStoredSite(site_name)
+    if site['contentType'] == 'pdf':
+        # print(compare_pdf(site['name'], site['uri']))
+        try:
+            if compare_pdf(site['name'], site['uri']):
+                print("success")
+                site['changes'] = ""
+                for subscriber in site['subscribers']:
+                    if subscriber in send_dict:
+                        send_dict[subscriber].append(i)
+                    else:
+                        send_dict[subscriber] = [i]
+        except Exception as e:
+            subject = "[Error] " + str(type(e)) + " happened when polling " + site_name
+            content = e.__str__()
+            mydb[site_name].insert_one(content)
+            mail = buildMailBody(subject, content, link=site['uri'], sendAsHtml=False)
+            sendmail([config['administrator']], mail, False)
+            return
+    else:
+        try:
+            raw_contents = uritool.URLReceiver(uri=site['uri'], contenttype=site['contentType'],
+                                               userAgent=config['userAgent']).performAction()
+            if site['parserType'] and site['path']:
+                parser = parsertool.ParserGenerator.getInstance(site['parserType'], site['path'])
+                raw_contents = parser.performAction(raw_contents)
+                if len(raw_contents) > 1:
+                    # This means parser get multiple results. Combine them into one.
+                    for i in range(1, len(raw_contents)):
+                        raw_contents[0].content += raw_contents[i].content
+                    raw_contents = [raw_contents[0]]
+        except Exception as e:
+            subject = "[Error] " + str(type(e)) + " happened when polling " + site_name
+            content = e.__str__()
+            mydb[site_name].insert_one(content)
+            mail = buildMailBody(subject, content, link=site['uri'], sendAsHtml=False)
+            sendmail([config['administrator']], mail, False)
+            return
+        site_previous = getStoredSite(site_name)
 
-    # We combine multiple results from parser.
-    # So raw_contents will only have one element in the list now.
-    for content in raw_contents:
-        # Only send update mail when site file exists and updated.
-        if not site_previous:
-            site['content'] = content.content
-            storeSite(site)
-        elif content.content != site_previous['content']:
-            site['content'] = content.content
+        # We combine multiple results from parser.
+        # So raw_contents will only have one element in the list now.
+        for content in raw_contents:
+            # Only send update mail when site file exists and updated.
+            if not site_previous:
+                site['content'] = content.content
+                storeSite(site)
+            elif content.content != site_previous['content']:
+                site['content'] = content.content
 
-            storeSite(site)
+                storeSite(site)
 
-            changes = myers.get_inserts(site_previous['content'].splitlines(), content.content.splitlines())
-            changes = '\n'.join(changes)
-            site['changes'] = changes
+                changes = myers.get_inserts(site_previous['content'].splitlines(), content.content.splitlines())
+                changes = '\n'.join(changes)
+                site['changes'] = changes
 
-            # sender_dict: A dictionary like {subscriber:[idx1, idx2, ...]}.
-            # The idxs are site index in sites list that the user subscribed and got updated.
-            for subscriber in site['subscribers']:
-                if subscriber in send_dict:
-                    send_dict[subscriber].append(i)
-                else:
-                    send_dict[subscriber] = [i]
+                # sender_dict: A dictionary like {subscriber:[idx1, idx2, ...]}.
+                # The idxs are site index in sites list that the user subscribed and got updated.
+                for subscriber in site['subscribers']:
+                    if subscriber in send_dict:
+                        send_dict[subscriber].append(i)
+                    else:
+                        send_dict[subscriber] = [i]
 
 
 def multi_thread(sites):
